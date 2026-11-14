@@ -1,0 +1,9 @@
+{"schema":1,"name":"Skips","updated":"2026-11-15T10:00:00Z","unknown":true,"games":[
+ {"id":"ok","title":"OK","work":{"delfruit":1234,"iww":"slug"},"versions":[
+   {"version":"2","file":{"url":"https://cdn.example/ok2.7z","sha256":"0000000000000000000000000000000000000000000000000000000000000000","size":1}},
+   {"version":"bad","file":{"url":"ok.zip","sha256":"NOTHEX","size":1}},
+   {"version":"1","file":{"url":"http://insecure.example/ok.zip","sha256":"0000000000000000000000000000000000000000000000000000000000000000","size":1}}]},
+ {"id":"Bad Id","title":"x","versions":[]},
+ {"id":"empty","title":"Empty","versions":[]},
+ "not an object",
+ {"id":"ok","title":"Dup","versions":[{"version":"1","file":{"url":"d.zip","sha256":"0000000000000000000000000000000000000000000000000000000000000000","size":1}}]}]}
