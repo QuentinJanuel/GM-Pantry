@@ -7,7 +7,8 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { buildRepo, splitShards } from "../src/build.ts";
+import { buildRepo } from "../src/build.ts";
+import { splitShards } from "../src/builder.ts";
 import { LIMITS, loadRepo, parseRepo, resolveUrl, validateHosting, verifyArchive } from "../src/index.ts";
 
 const base = "https://example.com/games/repo.json";
@@ -188,10 +189,10 @@ test("a repo needs games or shards", () => {
   assert.throws(() => parseRepo({ schema: 1, name: "n", updated: "2026-01-01" }, base));
 });
 
-test("splitShards is deterministic, sorted and capped", () => {
+test("splitShards is deterministic, sorted and capped", async () => {
   const games = ["c", "a", "e", "b", "d"].map(game);
-  const one = splitShards(games, 2);
-  const two = splitShards([...games].reverse(), 2);
+  const one = await splitShards(games, 2);
+  const two = await splitShards([...games].reverse(), 2);
   assert.deepEqual([...one.files], [...two.files]);
   assert.deepEqual(one.shards.map((s) => s.count), [2, 2, 1]);
   assert.deepEqual(JSON.parse([...one.files.values()][0]).games.map((g: any) => g.id), ["a", "b"]);
@@ -246,7 +247,7 @@ test("15,000 games: a small entry file, shards under the cap, all loaded", async
     title: `Synthetic game number ${i}`,
     meta: { author: "Someone", tags: ["platformer", "fangame"], description: "x".repeat(200) },
   }));
-  const { files, shards } = splitShards(games, 1000);
+  const { files, shards } = await splitShards(games, 1000);
   const entryJson = JSON.stringify({ schema: 1, name: "Big", updated: "2026-01-01", games: [], shards }, null, 2);
   const sizes = [...files.values()].map((c) => c.length);
   console.log(`15k: entry ${entryJson.length} B, ${shards.length} shards, ${Math.min(...sizes)}-${Math.max(...sizes)} B each`);

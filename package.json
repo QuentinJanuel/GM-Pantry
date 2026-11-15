@@ -12,7 +12,8 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" }
+    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+    "./s3": { "types": "./dist/s3.d.ts", "default": "./dist/s3.js" }
   },
   "bin": { "gm-pantry": "dist/cli.js" },
   "publishConfig": { "access": "public" },
@@ -22,6 +23,7 @@
     "test": "node --test test/*.test.ts scripts/*.test.mjs",
     "prepublishOnly": "npm run build"
   },
+  "dependencies": { "aws4fetch": "^1.0.20", "hash-wasm": "^4.13.0" },
   "devDependencies": { "@types/node": "^24.0.0", "typescript": "^5.9.0" },
   "engines": { "node": ">=24" }
 }
