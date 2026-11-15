@@ -51,8 +51,8 @@ jobs:
           BUMP: ${{ inputs.bump }}
           EXACT: ${{ inputs.version }}
         run: |
-          # A package not on npm yet has no version to bump from, so it starts at 0.0.0.
-          current=$(npm view gm-pantry version 2>/dev/null || echo 0.0.0)
+          # No release on npm yet (or only npm's 0.0.0-stage placeholder): start from 0.0.0.
+          current=$(npm view gm-pantry version 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' || echo 0.0.0)
           version=$(node scripts/next-version.mjs "$current" "$BUMP" "$EXACT")
           if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null; then
             echo "::error::the tag v$version already exists"; exit 1
