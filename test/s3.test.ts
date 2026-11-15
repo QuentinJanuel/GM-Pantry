@@ -214,6 +214,20 @@ test("repo.json writes are guarded by ETag, with a documented fallback when unsu
   } finally {
     fake.close();
   }
+  const odd = await setup({ brokenIfMatch: true });
+  try {
+    const one = await repoOf({ a: "one" });
+    await publishRepo(odd.store, one.out, { archives: one.archives });
+    const loaded = (await odd.store.getObject("repo.json"))!.etag;
+    const two = await repoOf({ a: "one", b: "two" });
+    const r = await publishRepo(odd.store, two.out, { archives: two.archives, ifMatch: loaded });
+    assert.equal(r.conditional, false);
+    // a real change is still refused
+    await odd.store.putObject("repo.json", "{}", { contentType: "application/json" });
+    await assert.rejects(publishRepo(odd.store, two.out, { ifMatch: loaded }), ConflictError);
+  } finally {
+    odd.fake.close();
+  }
   const legacy = await setup({ conditional: false });
   try {
     const one = await repoOf({ a: "one" });

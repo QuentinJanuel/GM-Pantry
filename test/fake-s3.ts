@@ -12,6 +12,8 @@ export interface Options {
   region?: string;
   /** false: If-Match / If-None-Match answer 501, like a service without conditional writes. */
   conditional?: boolean;
+  /** true: an If-Match write always answers 412, like a service that cannot match the ETag it handed out. */
+  brokenIfMatch?: boolean;
   /** CORS rule; without it, no CORS header is ever sent and preflights answer 403. */
   cors?: { origins: string[]; methods: string[]; headers: string[]; expose: string[] };
   /** Operations answered with 403 AccessDenied. */
@@ -114,6 +116,7 @@ export async function startFakeS3(o: Options = {}) {
         }
         const old = objects.get(key);
         if (conditionalHeader !== undefined && !opt.conditional) return fail(501, "NotImplemented", "conditional writes");
+        if (req.headers["if-match"] !== undefined && opt.brokenIfMatch) return fail(412, "PreconditionFailed", "At least one of the pre-conditions you specified did not hold");
         if (req.headers["if-match"] !== undefined && old?.etag !== req.headers["if-match"]) return fail(412, "PreconditionFailed");
         if (req.headers["if-none-match"] === "*" && old) return fail(412, "PreconditionFailed");
         const etag = `"${md5(body).toString("hex")}"`;
