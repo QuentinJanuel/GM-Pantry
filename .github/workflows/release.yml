@@ -4,7 +4,7 @@ name: Release
 # from the npm registry, builds and tests the package as that version, publishes it to npm with
 # trusted publishing (OIDC, no token) and provenance, then creates the GitHub release, and with it
 # the v<version> tag, on the commit being built. The version is set at build time, not committed.
-# npm's trusted publisher for @sculptr/gm-pantry names this repository and this file, release.yml.
+# npm's trusted publisher for gm-pantry names this repository and this file, release.yml.
 on:
   workflow_dispatch:
     inputs:
@@ -52,7 +52,7 @@ jobs:
           EXACT: ${{ inputs.version }}
         run: |
           # A package not on npm yet has no version to bump from, so it starts at 0.0.0.
-          current=$(npm view @sculptr/gm-pantry version 2>/dev/null || echo 0.0.0)
+          current=$(npm view gm-pantry version 2>/dev/null || echo 0.0.0)
           version=$(node scripts/next-version.mjs "$current" "$BUMP" "$EXACT")
           if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null; then
             echo "::error::the tag v$version already exists"; exit 1

@@ -34,10 +34,10 @@ A repo is a directory. Its entry point is `repo.json`, and the URL of that file 
 ## CLI
 
 ```
-npx @sculptr/gm-pantry init <dir> [--name NAME]
-npx @sculptr/gm-pantry build <dir>
-npx @sculptr/gm-pantry add <dir> <archive> [--id ID] [--title TITLE] [--version LABEL]
-npx @sculptr/gm-pantry validate <url|path> [--hosting]
+npx gm-pantry init <dir> [--name NAME]
+npx gm-pantry build <dir>
+npx gm-pantry add <dir> <archive> [--id ID] [--title TITLE] [--version LABEL]
+npx gm-pantry validate <url|path> [--hosting]
 ```
 
 - `build` hashes every `.zip`, `.7z` and `.rar` at the top of the folder (streaming), derives each
@@ -53,7 +53,7 @@ npx @sculptr/gm-pantry validate <url|path> [--hosting]
 ## Library
 
 ```ts
-import { parseRepo, resolveUrl, verifyArchive, validateHosting } from "@sculptr/gm-pantry";
+import { parseRepo, resolveUrl, verifyArchive, validateHosting } from "gm-pantry";
 
 const { repo, warnings } = parseRepo(await (await fetch(url)).json(), url); // throws RepoError if unusable
 const result = await verifyArchive(bytes, repo.games[0].versions[0].file); // { ok: true } or { ok: false, ... }

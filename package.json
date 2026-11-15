@@ -1,5 +1,5 @@
 {
-  "name": "@sculptr/gm-pantry",
+  "name": "gm-pantry",
   "version": "0.0.0",
   "description": "Game repositories: static directories of game archives with a repo.json, plus a parser, validator and CLI.",
   "keywords": ["gamemaker", "repository", "archive", "static"],
