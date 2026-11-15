@@ -30,6 +30,33 @@ A server that hosts a repo:
 An implementation SHOULD accept `http` on a loopback host (`localhost`, `127.0.0.1`, `[::1]`) so a
 repo can be tried locally. No other plain-`http` URL is valid anywhere in this format.
 
+### 2.1 Hosting notes (informative)
+
+These notes add no requirement; the revision of this document does not change.
+
+- **Caching.** `repo.json` is the only mutable file: serve it with `Cache-Control: no-cache`, so a cache
+  revalidates it with its `ETag` and an update shows at once. A shard is named after its content (§3.7)
+  and never changes: `public, max-age=31536000, immutable`. An archive is whatever the owner chose;
+  it is checked by hash anyway (§5).
+- **Publication order.** A publisher uploads archives and new shards first and `repo.json` last, and
+  deletes shards that nothing lists any more only after `repo.json` is live. A reader then never
+  sees a `repo.json` that points at a missing file.
+- **Concurrent publishers.** Where the service supports conditional writes, a publisher writes
+  `repo.json` with `If-Match: <ETag it loaded>` (`If-None-Match: *` for the first write) and reloads
+  and retries on `412`. Where it does not, the last writer wins.
+- **S3-compatible storage** (Amazon S3, Cloudflare R2, Backblaze B2, MinIO, Wasabi) serves a repo
+  as it is: put the files under a key prefix and serve the bucket publicly (or through the provider's
+  public domain). Reading needs `Access-Control-Allow-Origin` on `GET`/`HEAD` and, for `Range`, the
+  `Range` request header. A *web page that publishes* also needs, on the S3 API endpoint it uploads
+  to: `PUT`, `POST` (multipart) and `DELETE` in the allowed methods; the request headers it sends
+  (`Authorization`, `Content-Type`, `Cache-Control`, `If-Match`, `If-None-Match`, `x-amz-*`) allowed;
+  and `ETag` exposed, because a multipart upload reads each part's `ETag`. A browser cannot set
+  that CORS rule itself: `PutBucketCors` is a cross-origin request, which needs the rule it would
+  create. The owner sets it once with the provider's tooling.
+- **Large archives** go up as multipart uploads (parts of at least 5 MiB, at most 10 000 of them), so
+  the part size must grow with the file: a 4 GiB archive needs parts of at least 430 KB, a 500 GiB
+  one 52 MiB.
+
 ## 3. Document model
 
 `repo.json` is one UTF-8 JSON object.
