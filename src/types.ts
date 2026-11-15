@@ -39,13 +39,26 @@ export interface Game {
   versions: Version[];
 }
 
+/** A file of games listed by repo.json. Content-addressed: its bytes must hash to `sha256`. */
+export interface Shard {
+  url: string;
+  /** Lowercase hex SHA-256 of the shard file, exactly as stored. */
+  sha256: string;
+  /** Bytes. */
+  size: number;
+  /** Number of games in it; advisory. */
+  count?: number;
+}
+
 export interface Repo {
   schema: 1;
   name: string;
   description?: string;
   homepage?: string;
   updated: string;
+  /** Inline games; with `shards`, these come first. */
   games: Game[];
+  shards?: Shard[];
 }
 
 /** Something skipped or dropped while parsing; `path` is a JSON path such as `games[3].versions[0]`. */

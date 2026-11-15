@@ -3,8 +3,9 @@
 
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { basename, extname, join, relative, sep } from "node:path";
+import { LIMITS } from "./parse.ts";
 
 type Json = Record<string, any>;
 
@@ -19,6 +20,10 @@ export async function hashFile(path: string): Promise<{ sha256: string; size: nu
   }
   return { sha256: hash.digest("hex"), size };
 }
+
+const byId = (a: Json, b: Json) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+const SHARD_FILE = /^[0-9a-f]{16}\.json$/;
+const isRelative = (url: string) => !/^([a-z][a-z0-9+.-]*:|\/)/i.test(url);
 
 export const slug = (s: string) =>
   s.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 64);
@@ -62,7 +67,7 @@ export function upsertArchive(
   if (!game) {
     game = { id, title: opts.title ?? titleOf(decodeURIComponent(url)), versions: [] };
     games.push(game);
-    games.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    games.sort(byId);
   }
   game.versions.unshift({ version: opts.version ?? String(game.versions.length + 1), file });
 }
@@ -88,11 +93,89 @@ export async function listArchives(dir: string): Promise<string[]> {
     .sort();
 }
 
-export async function buildRepo(dir: string, name?: string, now?: string): Promise<{ changed: boolean; count: number }> {
+/** Splits games, sorted by id, into content-addressed shard files of at most `size` games (SPEC.md §3.7). Pure: same input, same bytes. */
+export function splitShards(games: Json[], size: number): { files: Map<string, string>; shards: Json[] } {
+  const sorted = [...games].sort(byId);
+  const files = new Map<string, string>();
+  const shards: Json[] = [];
+  for (let i = 0; i < sorted.length; i += size) {
+    const chunk = sorted.slice(i, i + size);
+    const content = JSON.stringify({ games: chunk }) + "\n";
+    const sha256 = createHash("sha256").update(content).digest("hex");
+    const url = `shards/${sha256.slice(0, 16)}.json`;
+    files.set(url, content);
+    shards.push({ url, sha256, size: Buffer.byteLength(content), count: chunk.length });
+  }
+  return { files, shards };
+}
+
+/** Moves the games of a sharded repo.json inline, so build can edit one flat list. */
+async function inlineShards(dir: string, repo: Json): Promise<void> {
+  for (const shard of repo.shards ?? []) {
+    if (!isRelative(shard.url)) throw new Error(`shard ${shard.url} is not a relative url; build can only rewrite shards inside ${dir}`);
+    const file = join(dir, decodeURIComponent(shard.url));
+    try {
+      (repo.games ??= []).push(...JSON.parse(await readFile(file, "utf8")).games);
+    } catch (e) {
+      throw new Error(`shard ${file} is unreadable: ${(e as Error).message}`);
+    }
+  }
+  delete repo.shards;
+}
+
+/** Drops versions whose relative archive url no longer exists in `dir`, then games left with none. */
+async function pruneMissing(dir: string, repo: Json): Promise<number> {
+  for (const game of repo.games) {
+    const kept: Json[] = [];
+    for (const v of game.versions ?? []) {
+      const url: string = v.file?.url ?? "";
+      if (!isRelative(url) || (await stat(join(dir, decodeURIComponent(url))).then(() => true, () => false))) kept.push(v);
+    }
+    game.versions = kept;
+  }
+  const before = repo.games.length;
+  repo.games = repo.games.filter((g: Json) => g.versions.length > 0);
+  return before - repo.games.length;
+}
+
+export interface BuildOptions {
+  /** Games per shard; at or below this many games the output stays inline. Default 1000. */
+  shardSize?: number;
+  /** Remove games whose archive file is gone from the folder. By default entries are kept. */
+  prune?: boolean;
+}
+
+export async function buildRepo(
+  dir: string,
+  name?: string,
+  now?: string,
+  { shardSize = 1000, prune = false }: BuildOptions = {},
+): Promise<{ changed: boolean; count: number; shards: number; pruned: number }> {
+  if (!Number.isInteger(shardSize) || shardSize < 1 || shardSize > LIMITS.gamesPerFile) {
+    throw new Error(`--shard-size must be an integer from 1 to ${LIMITS.gamesPerFile}`);
+  }
   const repo = (await readRepoJson(dir)) ?? emptyRepo(name ?? basename(dir));
+  await inlineShards(dir, repo);
   const files = await listArchives(dir);
   for (const f of files) upsertArchive(repo, encodeURIComponent(f), await hashFile(join(dir, f)));
-  return { changed: await writeRepoJson(dir, repo, now), count: files.length };
+  const pruned = prune ? await pruneMissing(dir, repo) : 0;
+
+  let out = repo;
+  let written = new Map<string, string>();
+  if (repo.games.length > shardSize) {
+    const { files: shardFiles, shards } = splitShards(repo.games, shardSize);
+    if (shards.length > LIMITS.shards) throw new Error(`${shards.length} shards exceeds the cap of ${LIMITS.shards}; raise --shard-size`);
+    await mkdir(join(dir, "shards"), { recursive: true });
+    for (const [url, content] of shardFiles) await writeFile(join(dir, url), content);
+    written = shardFiles;
+    out = { ...repo, games: [], shards };
+  }
+  const changed = await writeRepoJson(dir, out, now);
+  // Only files shaped like ours are touched; anything else in shards/ is the owner's.
+  for (const f of await readdir(join(dir, "shards")).catch(() => [])) {
+    if (SHARD_FILE.test(f) && !written.has(`shards/${f}`)) await rm(join(dir, "shards", f));
+  }
+  return { changed, count: files.length, shards: written.size, pruned };
 }
 
 /** The repo-relative url of an archive that must live inside the repo directory. */

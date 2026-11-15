@@ -1,0 +1,51 @@
+{
+ "schema": 1,
+ "name": "Sharded",
+ "updated": "2026-11-15",
+ "games": [
+  {
+   "id": "inline",
+   "title": "Inline",
+   "versions": [
+    {
+     "version": "1",
+     "file": {
+      "url": "inline.zip",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "size": 1
+     }
+    }
+   ]
+  }
+ ],
+ "shards": [
+  {
+   "url": "shards/a.json",
+   "sha256": "c493d4f0fe02306b0c6401efdc05839a179b1c286c5b79b1588d6637cea33f85",
+   "size": 359,
+   "count": 2
+  },
+  {
+   "url": "shards/b.json",
+   "sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+   "size": 181,
+   "count": 1
+  },
+  {
+   "url": "shards/c.json",
+   "sha256": "24b0031957939cb10a9b8f4f6cc92ba01c95ca2e93e394d1a06c1defa4d95b51",
+   "size": 184,
+   "count": 1
+  },
+  {
+   "url": "shards/missing.json",
+   "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+   "size": 1
+  },
+  {
+   "url": "shards/e.json",
+   "sha256": "nothex",
+   "size": 1
+  }
+ ]
+}

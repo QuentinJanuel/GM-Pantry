@@ -1,6 +1,6 @@
 // SPEC.md §2: does a URL actually serve a repo the way a browser consumer needs?
 
-import { parseRepo } from "./parse.ts";
+import { parseRepo, parseShard } from "./parse.ts";
 
 export interface Check {
   name: string;
@@ -38,7 +38,8 @@ export async function validateHosting(url: string, fetchImpl: typeof fetch = fet
   try {
     const { repo } = parseRepo(await res.json(), res.url || url);
     archive = repo.games[0]?.versions[0]?.file.url;
-    add("repo.json parses", "pass", `${repo.games.length} game(s)`);
+    add("repo.json parses", "pass", `${repo.games.length} inline game(s), ${repo.shards?.length ?? 0} shard(s)`);
+    if (repo.shards?.length) archive ??= await checkShard(repo.shards[0].url, res.url || url, fetchImpl, add);
   } catch (e) {
     add("repo.json parses", "fail", (e as Error).message);
     return report();
@@ -58,6 +59,21 @@ export async function validateHosting(url: string, fetchImpl: typeof fetch = fet
     add("archive", "fail", `fetch failed (no CORS or unreachable): ${(e as Error).message}`);
   }
   return report();
+}
+
+/** Fetches one shard; returns the first archive url in it, if any. */
+async function checkShard(url: string, repoUrl: string, fetchImpl: typeof fetch, add: (n: string, s: Check["status"], m: string) => void): Promise<string | undefined> {
+  try {
+    const res = await fetchImpl(url);
+    add("shard", res.ok ? "pass" : "fail", `HTTP ${res.status}`);
+    if (!res.ok) return;
+    cors(res, "shard cors", add);
+    const type = res.headers.get("content-type") ?? "";
+    add("shard content-type", /json|text\/plain/.test(type) ? "pass" : "warn", type || "missing");
+    return parseShard(await res.json(), repoUrl).games[0]?.versions[0]?.file.url;
+  } catch (e) {
+    add("shard", "fail", `fetch failed (no CORS or unreachable): ${(e as Error).message}`);
+  }
 }
 
 function cors(res: Response, name: string, add: (n: string, s: Check["status"], m: string) => void) {

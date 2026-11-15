@@ -19,11 +19,13 @@ repo URLs: a consumer is given a URL. A private repo is a repo at an unguessable
 A server that hosts a repo:
 
 1. MUST serve `repo.json` and every archive over HTTPS.
-2. MUST send `Access-Control-Allow-Origin: *` on `repo.json` and on every archive, so that a web
+2. MUST send `Access-Control-Allow-Origin: *` on `repo.json`, on every shard (§3.7) and on every archive, so that a web
    page on any origin can read them.
 3. SHOULD answer `Range` requests on archives with `206 Partial Content`.
 4. SHOULD send `ETag` or `Last-Modified` on `repo.json`, so that a consumer can revalidate it cheaply.
-5. SHOULD serve `repo.json` as `application/json` and MUST NOT serve an archive as `text/html`.
+5. SHOULD serve `repo.json` and shards as `application/json` and MUST NOT serve an archive as `text/html`.
+6. SHOULD serve shards with `Cache-Control: public, max-age=31536000, immutable`: a shard is
+   content-addressed (§3.7), so any cache may keep it forever.
 
 An implementation SHOULD accept `http` on a loopback host (`localhost`, `127.0.0.1`, `[::1]`) so a
 repo can be tried locally. No other plain-`http` URL is valid anywhere in this format.
@@ -41,7 +43,11 @@ repo can be tried locally. No other plain-`http` URL is valid anywhere in this f
 | `description` | string | MAY. |
 | `homepage` | https url | MAY. |
 | `updated` | string | MUST be present. ISO-8601 date or timestamp of the last change to the file. |
-| `games` | Game[] | MUST be present. MAY be empty. |
+| `games` | Game[] | Inline games. MAY be empty. |
+| `shards` | Shard[] | MAY. Files holding more games (§3.7). |
+
+At least one of `games` and `shards` MUST be present. A repo MAY have both: the games of a repo are
+`games` followed by the games of each shard in order.
 
 ### 3.2 Game
 
@@ -85,6 +91,22 @@ After resolution, every url MUST be `https` (§2).
 An archive is stored exactly as the author distributed it. A repo tool MUST NOT modify, recompress
 or repack an archive, and the `sha256` is the hash of that unmodified file.
 
+### 3.7 Shards
+
+A repo too large for one `repo.json` (a few thousand games) lists *shards*. A Shard is
+`{ "url", "sha256", "size", "count" }`: `url` (MAY be relative to `repo.json`), `sha256` and `size`
+of the shard file's bytes exactly as served (as for a File), and `count`, the number of games in it,
+which is advisory.
+
+A shard file is one UTF-8 JSON object `{ "games": Game[] }`. Urls inside its games are resolved
+against the URL of `repo.json`, not of the shard. A shard is immutable by convention: a repo tool
+SHOULD name it after its content (`shards/<first 16 hex digits of its sha256>.json`) and never
+rewrite a file under that name, so that a cache may keep it forever. A game `id` MUST be unique
+across the whole repo (inline and every shard).
+
+A repo with at most 1 000 games SHOULD keep them inline. Otherwise it SHOULD use shards of at most
+1 000 games each, sorted by `id`.
+
 ## 4. Reading a repo
 
 A consumer follows these rules, so that one bad entry never hides the rest of a repo.
@@ -92,17 +114,24 @@ A consumer follows these rules, so that one bad entry never hides the rest of a 
 1. Unknown fields are ignored, at every level. This is how the format grows (§7).
 2. If `repo.json` is not an object, `schema` is not `1`, or `name`, `updated` or `games` is missing or
    malformed, the repo fails to load.
-3. A Game that is malformed, a duplicate of an earlier `id`, or left with no valid Version is skipped.
+3. A Game that is malformed, a duplicate of an earlier `id` (in `games`, then in each shard in order), or left with no valid Version is skipped.
    A Version that is malformed is skipped. A skipped entry SHOULD be reported, not silently lost.
 4. A malformed advisory field (`description`, `homepage`, `work`, `meta` and its parts, `format`,
    `build`, `notes`, `released`) is dropped; the entry stays.
-5. Caps. A value over its cap is malformed. Strings are trimmed first.
+5. A Shard entry that is malformed is skipped. A shard that cannot be fetched, whose bytes do not match
+   its `size` and `sha256` (a consumer MUST check both and MUST NOT use any part of such a file), or
+   that is not `{ "games": [...] }` is skipped. Each is reported and the rest of the repo still
+   loads. A malformed `count` is dropped.
+6. A consumer MAY fetch shards in parallel and MAY keep them, keyed by `sha256`; a kept shard that
+   still matches its `sha256` needs no request.
+7. Caps. A value over its cap is malformed. Strings are trimmed first.
 
 | value | cap |
 |---|---|
 | `name` | 80 characters |
 | repo `description` | 280 |
-| `games` | 10 000 read; more are ignored |
+| `games` per file (`repo.json` and each shard) | 2 000 read; more are ignored |
+| `shards` | 1 000 read; more are ignored |
 | `id` | 64, matching `[a-z0-9][a-z0-9._-]*` |
 | `title` | 200 |
 | `versions` per game | 200 read |
@@ -114,6 +143,8 @@ A consumer follows these rules, so that one bad entry never hides the rest of a 
 | `screenshots`, `links` | 20 each; `links[].name` 80 |
 | `work` | 8 keys; key 32 characters matching `[a-z][a-z0-9_-]*`; string value 128 |
 
+The caps give a repo at most 2 000 inline games plus 1 000 shards of 2 000 games: 2 002 000 games.
+
 ## 5. Using an archive
 
 1. A consumer MUST check the downloaded bytes against `file.size` and `file.sha256`. On a mismatch it
@@ -123,7 +154,7 @@ A consumer follows these rules, so that one bad entry never hides the rest of a 
 
 ## 6. Not in revision 1
 
-Signatures, authentication headers, sharding of `repo.json`, streaming a game from the repo, and a
+Signatures, authentication headers, streaming a game from the repo, and a
 loose-file layout (games stored unpacked). Archives only.
 
 ## 7. Versioning and change log
@@ -135,7 +166,7 @@ repo (§4.2). The revision of this document counts every edit that changes a req
 
 | revision | change |
 |---|---|
-| 1 | First revision: `schema` 1. |
+| 1 | First revision: `schema` 1. Sharding (§3.7) is part of it: nothing was published before it, so `schema` stays 1. |
 
 ## 8. Example
 
@@ -177,5 +208,25 @@ repo (§4.2). The revision of this document counts every edit that changes a req
 }
 ```
 
-The `conformance/` directory holds `repo.json` inputs with the expected games and skipped entries;
+A sharded repo keeps an entry file like this; its games live in the shards (`size` and `count` here
+are illustrative):
+
+```json
+{
+  "schema": 1,
+  "name": "Big Pantry",
+  "updated": "2026-11-15",
+  "games": [],
+  "shards": [
+    {
+      "url": "shards/3b1f0c9a7d2e4f58.json",
+      "sha256": "3b1f0c9a7d2e4f58000000000000000000000000000000000000000000000000",
+      "size": 481012,
+      "count": 1000
+    }
+  ]
+}
+```
+
+The `conformance/` directory holds `repo.json` inputs (and the shard files they list) with the expected games and skipped entries;
 a reader implementation SHOULD pass them.
