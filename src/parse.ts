@@ -1,13 +1,14 @@
 // SPEC.md §4 and §5: reading a repo.json. Entries that are malformed are skipped and reported;
 // advisory fields that are malformed are dropped and reported. Only a broken envelope throws.
 
-import type { ArchiveFile, Format, Game, Meta, Repo, Version, Warning } from "./types.ts";
+import type { ArchiveFile, Format, Game, Meta, Repo, Shard, Version, Warning } from "./types.ts";
 
 /** The caps of SPEC.md §4.4. */
 export const LIMITS = {
   name: 80,
   repoDescription: 280,
-  games: 10_000,
+  gamesPerFile: 2000,
+  shards: 1000,
   id: 64,
   title: 200,
   versions: 200,
@@ -72,7 +73,9 @@ export function parseRepo(json: unknown, baseUrl: string): { repo: Repo; warning
   const name = text(json.name, LIMITS.name);
   if (name === undefined) throw new RepoError(`"name" must be a non-empty string of at most ${LIMITS.name} characters`);
   if (!validDate(json.updated)) throw new RepoError(`"updated" must be an ISO-8601 date or timestamp`);
-  if (!Array.isArray(json.games)) throw new RepoError(`"games" must be an array`);
+  if (json.games === undefined && json.shards === undefined) throw new RepoError(`"games" or "shards" must be present`);
+  if (json.games !== undefined && !Array.isArray(json.games)) throw new RepoError(`"games" must be an array`);
+  if (json.shards !== undefined && !Array.isArray(json.shards)) throw new RepoError(`"shards" must be an array`);
 
   const repo: Repo = { schema: 1, name, updated: json.updated, games: [] };
   const description = text(json.description, LIMITS.repoDescription);
@@ -81,17 +84,51 @@ export function parseRepo(json: unknown, baseUrl: string): { repo: Repo; warning
   if (isSecureUrl(json.homepage)) repo.homepage = json.homepage;
   else if (json.homepage !== undefined) warn("homepage", "dropped: not an https url");
 
-  const seen = new Set<string>();
-  json.games.slice(0, LIMITS.games).forEach((entry, i) => {
+  repo.games = parseGames(json.games ?? [], baseUrl, new Set(), warn);
+  if (json.shards) {
+    const shards: Shard[] = [];
+    json.shards.slice(0, LIMITS.shards).forEach((entry, i) => {
+      const shard = parseShardRef(entry, `shards[${i}]`, baseUrl, warn);
+      if (shard) shards.push(shard);
+    });
+    if (json.shards.length > LIMITS.shards) warn("shards", `only the first ${LIMITS.shards} entries are read`);
+    if (shards.length) repo.shards = shards;
+  }
+  return { repo, warnings };
+}
+
+/** Parses a shard file already decoded from JSON (SPEC.md §3.7). `baseUrl` is the url of repo.json, not of the shard. `seen` carries ids already taken elsewhere in the repo. Throws RepoError. */
+export function parseShard(json: unknown, baseUrl: string, seen = new Set<string>()): { games: Game[]; warnings: Warning[] } {
+  const warnings: Warning[] = [];
+  if (!isObject(json) || !Array.isArray(json.games)) throw new RepoError(`a shard must be an object with a "games" array`);
+  const games = parseGames(json.games, baseUrl, seen, (path, message) => warnings.push({ path, message }));
+  return { games, warnings };
+}
+
+function parseGames(list: unknown[], baseUrl: string, seen: Set<string>, warn: (p: string, m: string) => void): Game[] {
+  const games: Game[] = [];
+  list.slice(0, LIMITS.gamesPerFile).forEach((entry, i) => {
     const path = `games[${i}]`;
     const game = parseGame(entry, path, baseUrl, warn);
     if (!game) return;
     if (seen.has(game.id)) return warn(path, `skipped: duplicate id "${game.id}"`);
     seen.add(game.id);
-    repo.games.push(game);
+    games.push(game);
   });
-  if (json.games.length > LIMITS.games) warn("games", `only the first ${LIMITS.games} entries are read`);
-  return { repo, warnings };
+  if (list.length > LIMITS.gamesPerFile) warn("games", `only the first ${LIMITS.gamesPerFile} entries are read`);
+  return games;
+}
+
+function parseShardRef(entry: unknown, path: string, baseUrl: string, warn: (p: string, m: string) => void): Shard | undefined {
+  if (!isObject(entry)) return void warn(path, "skipped: not an object");
+  const url = typeof entry.url === "string" && entry.url.length <= LIMITS.url ? resolveUrl(entry.url, baseUrl) : undefined;
+  if (url === undefined || !isSecureUrl(url)) return void warn(path, `skipped: "url" must resolve to an https url`);
+  if (typeof entry.sha256 !== "string" || !SHA256.test(entry.sha256)) return void warn(path, `skipped: "sha256" must be 64 lowercase hex digits`);
+  if (!Number.isSafeInteger(entry.size) || (entry.size as number) < 0) return void warn(path, `skipped: "size" must be a non-negative integer`);
+  const shard: Shard = { url, sha256: entry.sha256, size: entry.size as number };
+  if (Number.isSafeInteger(entry.count) && (entry.count as number) >= 0) shard.count = entry.count as number;
+  else if (entry.count !== undefined) warn(`${path}.count`, "dropped: not a non-negative integer");
+  return shard;
 }
 
 function parseGame(entry: unknown, path: string, baseUrl: string, warn: (p: string, m: string) => void): Game | undefined {

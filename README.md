@@ -29,13 +29,15 @@ A repo is a directory. Its entry point is `repo.json`, and the URL of that file 
   download; a mismatch discards the file.
 - File urls may be relative, so a mirror of the directory is a working repo.
 - Unknown fields are ignored; a malformed game or version is skipped and the rest of the repo still loads.
+- A big repo lists content-addressed `shards` (files of at most 1 000 games) instead of inlining its
+  games; a bad or tampered shard is skipped and the rest still loads.
 - Nothing lists or indexes repos. A private repo is an unguessable URL.
 
 ## CLI
 
 ```
 npx gm-pantry init <dir> [--name NAME]
-npx gm-pantry build <dir>
+npx gm-pantry build <dir> [--shard-size N] [--prune]
 npx gm-pantry add <dir> <archive> [--id ID] [--title TITLE] [--version LABEL]
 npx gm-pantry validate <url|path> [--hosting]
 ```
@@ -43,19 +45,26 @@ npx gm-pantry validate <url|path> [--hosting]
 - `build` hashes every `.zip`, `.7z` and `.rar` at the top of the folder (streaming), derives each
   game's id and title from the file name, and writes `repo.json`. An existing `repo.json` is kept:
   hand-edited metadata, other versions and unknown fields survive, and a changed archive only has its
-  hash and size refreshed. It never deletes an entry. `updated` moves only when something changed, so
+  hash and size refreshed. By default it never deletes an entry (`--prune` removes games whose archive file is gone from the
+  folder). Above `--shard-size` games (default 1000) it writes `shards/<sha16>.json` files of at most
+  N games sorted by id plus an entry `repo.json`, deletes the shards it generated earlier that are no
+  longer referenced, and gives the same bytes for the same input; at or below it the output stays
+  inline. `add` refuses a sharded repo: put the archive in the folder and run `build`. `updated` moves only when something changed, so
   a rebuild of an unchanged folder is byte-identical.
 - `add` does the same for one archive, which must be inside the directory, as a new newest version.
 - `validate` parses a `repo.json` (a URL, a folder or a file) and reports every skipped entry; for a
-  folder it also checks each archive's hash. `--hosting` (URL only) fetches `repo.json` and a sample
+  folder it also loads every shard and checks each archive's hash. `--hosting` (URL only) fetches `repo.json` and a sample
   archive and checks CORS, Range, content types and validators. Exit code 1 on any problem.
 
 ## Library
 
 ```ts
-import { parseRepo, resolveUrl, verifyArchive, validateHosting } from "gm-pantry";
+import { loadRepo, parseRepo, parseShard, verifyArchive, validateHosting } from "gm-pantry";
 
-const { repo, warnings } = parseRepo(await (await fetch(url)).json(), url); // throws RepoError if unusable
+// repo.json plus every shard, verified by hash; throws RepoError only if repo.json is unusable
+const { repo, warnings } = await loadRepo(url, { concurrency: 4, onProgress: (done, total) => {}, shardCache });
+// parseRepo(json, url) and parseShard(json, url) read the two kinds of file you fetched yourself
+// shardCache is { get(sha256), put(sha256, bytes) }: persist shards by hash and a hit skips the network
 const result = await verifyArchive(bytes, repo.games[0].versions[0].file); // { ok: true } or { ok: false, ... }
 ```
 
@@ -65,7 +74,8 @@ APIs.
 ## Hosting
 
 The host must serve HTTPS and send `Access-Control-Allow-Origin: *` on `repo.json` and the archives.
-`Range` on archives and `ETag`/`Last-Modified` on `repo.json` are recommended. Check with
+`Range` on archives, `ETag`/`Last-Modified` on `repo.json`, and a long `Cache-Control: immutable` on
+shards (they are named after their hash) are recommended. Check with
 `gm-pantry validate <url> --hosting`.
 
 - **GitHub Pages** serves `Access-Control-Allow-Origin: *` already. Keep archives under its size limits.

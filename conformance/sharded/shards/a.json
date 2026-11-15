@@ -1,0 +1,1 @@
+{"games":[{"id":"alpha","title":"Alpha","versions":[{"version":"1","file":{"url":"alpha.zip","sha256":"0000000000000000000000000000000000000000000000000000000000000000","size":1}}]},{"id":"inline","title":"Inline","versions":[{"version":"1","file":{"url":"inline.zip","sha256":"0000000000000000000000000000000000000000000000000000000000000000","size":1}}]}]}
