@@ -116,3 +116,11 @@ test("contents and readme travel with a version, survive parsing, and bad ones a
   assert.equal(bad.repo.games[0].versions[0].contents, undefined);
   assert.equal(bad.warnings.length, 1);
 });
+
+test("a repo icon resolves against repo.json and a non-https one is dropped", () => {
+  const repo = { ...emptyRepo("T", NOW), icon: "icon.png" };
+  assert.equal(parseRepo(JSON.parse(JSON.stringify(repo)), "https://e.com/r/repo.json").repo.icon, "https://e.com/r/icon.png");
+  const bad = parseRepo({ ...repo, icon: "http://e.com/i.png" }, "https://e.com/repo.json");
+  assert.equal(bad.repo.icon, undefined);
+  assert.equal(bad.warnings.length, 1);
+});

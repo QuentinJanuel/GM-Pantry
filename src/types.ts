@@ -59,6 +59,8 @@ export interface Repo {
   name: string;
   description?: string;
   homepage?: string;
+  /** A small square image (https url, relative ok) that stands for the repository. Advisory. */
+  icon?: string;
   updated: string;
   /** Inline games; with `shards`, these come first. */
   games: Game[];

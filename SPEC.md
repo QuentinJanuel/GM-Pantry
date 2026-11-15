@@ -68,6 +68,7 @@ These notes add no requirement; the revision of this document does not change.
 | `schema` | integer | MUST be `1`. |
 | `name` | string | MUST be present. |
 | `description` | string | MAY. |
+| `icon` | string | MAY. An https url (MAY be relative to `repo.json`) of a small square image that stands for the repository. Advisory; a consumer without one makes its own. |
 | `homepage` | https url | MAY. |
 | `updated` | string | MUST be present. ISO-8601 date or timestamp of the last change to the file. |
 | `games` | Game[] | Inline games. MAY be empty. |
@@ -145,7 +146,7 @@ A consumer follows these rules, so that one bad entry never hides the rest of a 
    malformed, the repo fails to load.
 3. A Game that is malformed, a duplicate of an earlier `id` (in `games`, then in each shard in order), or left with no valid Version is skipped.
    A Version that is malformed is skipped. A skipped entry SHOULD be reported, not silently lost.
-4. A malformed advisory field (`description`, `homepage`, `work`, `meta` and its parts, `format`,
+4. A malformed advisory field (`description`, `homepage`, `icon`, `work`, `meta` and its parts, `format`,
    `build`, `notes`, `contents`, `readme`, `released`) is dropped; the entry stays.
 5. A Shard entry that is malformed is skipped. A shard that cannot be fetched, whose bytes do not match
    its `size` and `sha256` (a consumer MUST check both and MUST NOT use any part of such a file), or

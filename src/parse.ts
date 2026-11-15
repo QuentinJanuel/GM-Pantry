@@ -87,6 +87,12 @@ export function parseRepo(json: unknown, baseUrl: string): { repo: Repo; warning
   if (isSecureUrl(json.homepage)) repo.homepage = json.homepage;
   else if (json.homepage !== undefined) warn("homepage", "dropped: not an https url");
 
+  if (typeof json.icon === "string" && json.icon.length <= LIMITS.url) {
+    const icon = resolveUrl(json.icon, baseUrl);
+    if (icon !== undefined && isSecureUrl(icon)) repo.icon = icon;
+    else warn("icon", "dropped: not an https url");
+  } else if (json.icon !== undefined) warn("icon", "dropped: not an https url");
+
   repo.games = parseGames(json.games ?? [], baseUrl, new Set(), warn);
   if (json.shards) {
     const shards: Shard[] = [];
