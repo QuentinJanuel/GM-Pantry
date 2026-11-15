@@ -102,6 +102,8 @@ At least one of `games` and `shards` MUST be present. A repo MAY have both: the 
 | `format` | `"zip"`, `"7z"` or `"rar"` | MAY. If absent the consumer guesses from the file name or bytes. |
 | `build` | string | MAY. The claimed lowercase-hex SHA-256 of the normalised game payload inside the archive. A hint only: a consumer that needs it MUST recompute it. |
 | `notes` | string | MAY. |
+| `contents` | list of `{ path, size }` | MAY. The files inside the archive: `path` relative to the archive root, `size` the unpacked length in bytes. Advisory: lets a consumer tell what the game is without downloading it; a consumer that needs certainty MUST read the archive. |
+| `readme` | string | MAY. The text of the archive's README, so it can be shown without downloading the archive. Advisory. |
 | `released` | string | MAY. ISO-8601 date. |
 
 File: `url` (string, MAY be relative to `repo.json`), `sha256` (lowercase hex SHA-256 of the archive
@@ -144,7 +146,7 @@ A consumer follows these rules, so that one bad entry never hides the rest of a 
 3. A Game that is malformed, a duplicate of an earlier `id` (in `games`, then in each shard in order), or left with no valid Version is skipped.
    A Version that is malformed is skipped. A skipped entry SHOULD be reported, not silently lost.
 4. A malformed advisory field (`description`, `homepage`, `work`, `meta` and its parts, `format`,
-   `build`, `notes`, `released`) is dropped; the entry stays.
+   `build`, `notes`, `contents`, `readme`, `released`) is dropped; the entry stays.
 5. A Shard entry that is malformed is skipped. A shard that cannot be fetched, whose bytes do not match
    its `size` and `sha256` (a consumer MUST check both and MUST NOT use any part of such a file), or
    that is not `{ "games": [...] }` is skipped. Each is reported and the rest of the repo still
@@ -165,6 +167,8 @@ A consumer follows these rules, so that one bad entry never hides the rest of a 
 | `version` label | 64 |
 | any url | 2048 |
 | `meta.description`, `notes` | 2000 |
+| `contents` | 2000 entries of at most 260 characters per path |
+| `readme` | 20000 |
 | `meta.author` | 120 |
 | `tags` | 20 of at most 40 characters |
 | `screenshots`, `links` | 20 each; `links[].name` 80 |

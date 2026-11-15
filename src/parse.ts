@@ -17,6 +17,9 @@ export const LIMITS = {
   metaText: 2000,
   author: 120,
   notes: 2000,
+  contents: 2000,
+  contentPath: 260,
+  readme: 20000,
   tags: 20,
   tag: 40,
   screenshots: 20,
@@ -173,9 +176,25 @@ function parseVersion(v: unknown, path: string, baseUrl: string, warn: (p: strin
   const notes = text(v.notes, LIMITS.notes);
   if (notes) version.notes = notes;
   else if (v.notes !== undefined) warn(`${path}.notes`, "dropped");
+  const contents = parseContents(v.contents);
+  if (contents) version.contents = contents;
+  else if (v.contents !== undefined) warn(`${path}.contents`, "dropped: not a list of {path, size} of at most 2000 entries");
+  if (typeof v.readme === "string" && v.readme.trim() !== "" && v.readme.length <= LIMITS.readme) version.readme = v.readme;
+  else if (v.readme !== undefined) warn(`${path}.readme`, "dropped");
   if (validDate(v.released)) version.released = v.released;
   else if (v.released !== undefined) warn(`${path}.released`, "dropped: not an ISO-8601 date");
   return version;
+}
+
+function parseContents(c: unknown): { path: string; size: number }[] | undefined {
+  if (!Array.isArray(c) || c.length === 0 || c.length > LIMITS.contents) return undefined;
+  const out: { path: string; size: number }[] = [];
+  for (const e of c) {
+    if (!isObject(e) || typeof e.path !== "string" || e.path === "" || e.path.length > LIMITS.contentPath) return undefined;
+    if (!Number.isSafeInteger(e.size) || (e.size as number) < 0) return undefined;
+    out.push({ path: e.path, size: e.size as number });
+  }
+  return out;
 }
 
 function parseWork(w: unknown): Record<string, string | number> | undefined {
