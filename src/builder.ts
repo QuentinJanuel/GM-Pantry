@@ -31,6 +31,9 @@ export interface NewVersion {
   version?: string;
   notes?: string;
   released?: string;
+  /** What is inside the archive (paths relative to its root) and its README text, if any. */
+  contents?: { path: string; size: number }[];
+  readme?: string;
   format?: string;
   file: { url: string; sha256: string; size: number };
 }
@@ -42,6 +45,8 @@ export function addVersion(repo: Json, v: NewVersion): Json {
     for (const old of game.versions ?? []) {
       if (old.file?.url === v.file.url) {
         old.file = { ...old.file, sha256: v.file.sha256, size: v.file.size };
+        if (v.contents) old.contents = v.contents;
+        if (v.readme) old.readme = v.readme;
         return game;
       }
     }
@@ -59,8 +64,8 @@ export function addVersion(repo: Json, v: NewVersion): Json {
   let label = v.version;
   if (label === undefined) for (let n = game.versions.length + 1; taken.has((label = String(n))); n++);
   else if (taken.has(label)) throw new Error(`game ${id} already has a version ${label}`);
-  const { notes, released, format, file } = v;
-  game.versions.unshift({ version: label, file, ...(format && { format }), ...(notes && { notes }), ...(released && { released }) });
+  const { notes, released, format, file, contents, readme } = v;
+  game.versions.unshift({ version: label, file, ...(format && { format }), ...(notes && { notes }), ...(contents && { contents }), ...(readme && { readme }), ...(released && { released }) });
   return game;
 }
 

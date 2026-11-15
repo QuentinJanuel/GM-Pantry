@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { addVersion, emptyRepo, inlineShards, loadRepo, removeGame, removeVersion, serialize, updateGame } from "../src/index.ts";
+import { parseRepo, addVersion, emptyRepo, inlineShards, loadRepo, removeGame, removeVersion, serialize, updateGame } from "../src/index.ts";
 
 const S = "0".repeat(64);
 const file = (url: string) => ({ url, sha256: S, size: 1 });
@@ -99,4 +99,20 @@ test("15,000 games built with the operations serialize deterministically and loa
   const { repo: loaded, warnings } = await loadRepo("https://example.com/repo.json", { fetch: f });
   assert.equal(loaded.games.length, 15_000);
   assert.deepEqual(warnings, []);
+});
+
+test("contents and readme travel with a version, survive parsing, and bad ones are dropped", () => {
+  const repo = emptyRepo("T", NOW);
+  const contents = [{ path: "game.exe", size: 10 }];
+  addVersion(repo, { title: "G", file: file("https://e.com/a.zip"), contents, readme: "hello" });
+  const ok = parseRepo(JSON.parse(JSON.stringify(repo)), "https://e.com/repo.json");
+  assert.deepEqual(ok.repo.games[0].versions[0].contents, contents);
+  assert.equal(ok.repo.games[0].versions[0].readme, "hello");
+  // refreshing the same archive updates them
+  addVersion(repo, { title: "G", file: file("https://e.com/a.zip"), readme: "bye" });
+  assert.equal(repo.games[0].versions[0].readme, "bye");
+  repo.games[0].versions[0].contents = [{ path: "", size: -1 }];
+  const bad = parseRepo(JSON.parse(JSON.stringify(repo)), "https://e.com/repo.json");
+  assert.equal(bad.repo.games[0].versions[0].contents, undefined);
+  assert.equal(bad.warnings.length, 1);
 });

@@ -17,6 +17,10 @@ export interface Version {
   /** Claimed hash of the normalised game payload; a hint, consumers recompute. */
   build?: string;
   notes?: string;
+  /** What is inside the archive, so a consumer can tell what it holds without downloading it. Advisory. */
+  contents?: { path: string; size: number }[];
+  /** The archive's README text, so it can be shown without downloading the archive. Advisory. */
+  readme?: string;
   /** YYYY-MM-DD, or a full ISO-8601 timestamp. */
   released?: string;
 }
