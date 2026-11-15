@@ -360,6 +360,31 @@ const GENERATED_SHARD = /^shards\/[0-9a-f]{16}\.json$/;
 const keyOf = (url: string) => decodeURIComponent(url);
 
 /**
+ * repo.json with its guard. A 412 is a real conflict only if the object's ETag is no longer the expected one:
+ * some services answer 412 for an ETag they handed out themselves (quoted versus bare), so when the ETag still
+ * matches, retry once with the bare form, then without a guard (the ETag was checked just now).
+ */
+async function putGuarded(store: S3Store, body: string, put: { contentType: string; cacheControl: string }, guard: { ifMatch?: string; ifNoneMatch?: string }, expected: string | null, result: PublishResult): Promise<void> {
+  const conflict = () => new ConflictError("repo.json changed while publishing; reload and apply the edit again");
+  try {
+    await store.putObject("repo.json", body, { ...put, ...guard });
+    return;
+  } catch (e) {
+    if (!(e instanceof S3Error) || e.status !== 412) throw e;
+    if (!expected || (await store.headObject("repo.json"))?.etag !== expected) throw conflict();
+  }
+  const bare = expected.replace(/^W\//, "").replace(/^"(.*)"$/, "$1");
+  try {
+    await store.putObject("repo.json", body, { ...put, ifMatch: bare });
+  } catch (e) {
+    if (!(e instanceof S3Error) || e.status !== 412) throw e;
+    if ((await store.headObject("repo.json"))?.etag !== expected) throw conflict();
+    result.conditional = false;
+    await store.putObject("repo.json", body, put);
+  }
+}
+
+/**
  * Uploads archives and new shards first and repo.json last, so a reader never sees a repo.json that points at missing files;
  * then deletes the shards nothing lists any more. repo.json is written with `If-Match` (or `If-None-Match: *`) where the service supports it.
  */
@@ -394,9 +419,8 @@ export async function publishRepo(store: S3Store, input: PublishInput, o: Publis
   const guard = expected ? { ifMatch: expected } : { ifNoneMatch: "*" };
   const put = { contentType: "application/json", cacheControl: "no-cache" };
   try {
-    await store.putObject("repo.json", input.repoJson, { ...put, ...guard });
+    await putGuarded(store, input.repoJson, put, guard, expected, result);
   } catch (e) {
-    if (e instanceof S3Error && e.status === 412) throw new ConflictError("repo.json changed while publishing; reload and apply the edit again");
     if (!(e instanceof S3Error) || (e.status !== 501 && e.code !== "NotImplemented")) throw e;
     result.conditional = false;
     await store.putObject("repo.json", input.repoJson, put);
