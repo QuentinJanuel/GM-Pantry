@@ -33,6 +33,7 @@ export async function readRepoJson(dir: string): Promise<Json | undefined> {
 /** Writes repo.json unless it already holds exactly these bytes; true when it changed. */
 export async function writeRepoJson(dir: string, repoJson: string): Promise<boolean> {
   if (repoJson === (await readFile(join(dir, "repo.json"), "utf8").catch(() => undefined))) return false;
+  await mkdir(dir, { recursive: true });
   await writeFile(join(dir, "repo.json"), repoJson);
   return true;
 }

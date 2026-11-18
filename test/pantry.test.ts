@@ -93,6 +93,13 @@ test("build is deterministic and keeps hand edits", async () => {
   assert.equal(next.updated, "2027-01-01T00:00:00.000Z");
 });
 
+test("cli init creates a missing folder", async () => {
+  const run = promisify(execFile);
+  const dir = join(await mkdtemp(join(tmpdir(), "pantry-")), "new", "pantry");
+  await run("node", ["src/cli.ts", "init", dir, "--name", "T"]);
+  assert.equal(JSON.parse(await readFile(join(dir, "repo.json"), "utf8")).name, "T");
+});
+
 test("cli add and validate", async () => {
   const run = promisify(execFile);
   const dir = await mkdtemp(join(tmpdir(), "pantry-"));
