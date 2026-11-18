@@ -1,0 +1,5 @@
+# pnpm fails an install on a build script it has no verdict for. This file also makes docs/ its own
+# pnpm root, so it never touches the package's lockfile at the repo root.
+allowBuilds:
+  # Its install script only prints a banner.
+  core-js: false
