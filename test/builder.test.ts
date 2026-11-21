@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseRepo, addVersion, emptyRepo, inlineShards, loadRepo, removeGame, removeVersion, serialize, updateGame } from "../src/index.ts";
+import { LIMITS, parseRepo, addVersion, emptyRepo, inlineShards, loadRepo, removeGame, removeVersion, serialize, updateGame } from "../src/index.ts";
 
 const S = "0".repeat(64);
 const file = (url: string) => ({ url, sha256: S, size: 1 });
@@ -123,4 +123,21 @@ test("a repo icon resolves against repo.json and a non-https one is dropped", ()
   const bad = parseRepo({ ...repo, icon: "http://e.com/i.png" }, "https://e.com/repo.json");
   assert.equal(bad.repo.icon, undefined);
   assert.equal(bad.warnings.length, 1);
+});
+
+test("a repo icon may be a small base64 png, jpeg or webp data url, nothing else", () => {
+  const png = "data:image/png;base64,iVBORw0KGgo=";
+  const parse = (icon: string) => parseRepo({ ...emptyRepo("T", NOW), icon }, "https://e.com/repo.json");
+  assert.equal(parse(png).repo.icon, png);
+  assert.equal(parse("data:image/webp;base64,UklGRg==").repo.icon, "data:image/webp;base64,UklGRg==");
+  for (const bad of [
+    "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=",
+    "data:text/html;base64,PGI+",
+    "data:image/png,not-base64",
+    `data:image/png;base64,${"A".repeat(LIMITS.iconData)}`,
+  ]) {
+    const r = parse(bad);
+    assert.equal(r.repo.icon, undefined, bad.slice(0, 40));
+    assert.equal(r.warnings.length, 1);
+  }
 });

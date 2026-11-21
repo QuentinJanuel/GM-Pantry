@@ -68,7 +68,7 @@ These notes add no requirement; the revision of this document does not change.
 | `schema` | integer | MUST be `1`. |
 | `name` | string | MUST be present. |
 | `description` | string | MAY. |
-| `icon` | string | MAY. An https url (MAY be relative to `repo.json`) of a small square image that stands for the repository. Advisory; a consumer without one makes its own. |
+| `icon` | string | MAY. An https url (MAY be relative to `repo.json`) of a small square image that stands for the repository, or the image itself as a `data:image/png`, `data:image/jpeg` or `data:image/webp` base64 url of at most 16384 characters (so a repository with nowhere to put an image can still have one). Advisory; a consumer without one makes its own. |
 | `homepage` | https url | MAY. |
 | `updated` | string | MUST be present. ISO-8601 date or timestamp of the last change to the file. |
 | `games` | Game[] | Inline games. MAY be empty. |
@@ -167,6 +167,7 @@ A consumer follows these rules, so that one bad entry never hides the rest of a 
 | `versions` per game | 200 read |
 | `version` label | 64 |
 | any url | 2048 |
+| `icon` as a data url | 16384 |
 | `meta.description`, `notes` | 2000 |
 | `contents` | 2000 entries of at most 260 characters per path |
 | `readme` | 20000 |

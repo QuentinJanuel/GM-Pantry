@@ -19,7 +19,7 @@ Protocol **v1**: `schema` is `1`, specification revision 1. This page summarises
 | `shards` | Files holding more games. At least one of `games` and `shards` is required; the games are `games` then each shard in order. |
 | `description` | Optional, at most 280 characters. |
 | `homepage` | Optional https url. |
-| `icon` | Optional. An https url, relative allowed, of a small square image that stands for the repository. Advisory. |
+| `icon` | Optional. An https url, relative allowed, of a small square image that stands for the repository, or the image itself as a base64 `data:image/png`, `data:image/jpeg` or `data:image/webp` url of at most 16384 characters. Advisory. |
 
 ## Game
 
