@@ -14,6 +14,7 @@ export const LIMITS = {
   versions: 200,
   versionLabel: 64,
   url: 2048,
+  iconData: 16384,
   metaText: 2000,
   author: 120,
   notes: 2000,
@@ -37,6 +38,8 @@ const SHA256 = /^[0-9a-f]{64}$/;
 const WORK_KEY = /^[a-z][a-z0-9_-]*$/;
 const DATE = /^\d{4}-\d{2}-\d{2}(T[\d:.]+(Z|[+-]\d{2}:\d{2}))?$/;
 const FORMATS = ["zip", "7z", "rar"];
+/** An icon carried inside repo.json: a raster image only (no SVG, which can hold script). */
+const DATA_ICON = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
 
 /** Resolves a possibly relative url against the url of repo.json. Returns undefined if it is not a url. */
 export function resolveUrl(url: string, baseUrl: string): string | undefined {
@@ -87,7 +90,10 @@ export function parseRepo(json: unknown, baseUrl: string): { repo: Repo; warning
   if (isSecureUrl(json.homepage)) repo.homepage = json.homepage;
   else if (json.homepage !== undefined) warn("homepage", "dropped: not an https url");
 
-  if (typeof json.icon === "string" && json.icon.length <= LIMITS.url) {
+  if (typeof json.icon === "string" && json.icon.startsWith("data:")) {
+    if (json.icon.length <= LIMITS.iconData && DATA_ICON.test(json.icon)) repo.icon = json.icon;
+    else warn("icon", "dropped: a data url must be a base64 png, jpeg or webp of at most 16384 characters");
+  } else if (typeof json.icon === "string" && json.icon.length <= LIMITS.url) {
     const icon = resolveUrl(json.icon, baseUrl);
     if (icon !== undefined && isSecureUrl(icon)) repo.icon = icon;
     else warn("icon", "dropped: not an https url");
