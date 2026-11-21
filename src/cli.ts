@@ -56,7 +56,7 @@ async function publish(dir: string, o: Record<string, string | boolean | undefin
     for (const v of g.versions) {
       const url: string = v.file.url;
       if (/^([a-z][a-z0-9+.-]*:|\/)/i.test(url)) continue; // not ours to upload
-      archives.push({ url, body: await openAsBlob(join(dir, decodeURIComponent(url))), sha256: v.file.sha256 as string });
+      archives.push({ url, body: await openAsBlob(join(dir, decodeURIComponent(url))), sha256: v.file.sha256 as string | undefined });
     }
   }
   const t = await store.testConnection();
@@ -159,6 +159,7 @@ async function validate(target: string, hosting: boolean): Promise<number> {
       try {
         const r = await verifyArchive(await readFile(path), v.file);
         if (!r.ok) console.log(`error ${g.id} ${v.version}: ${r.reason} is ${r.actual}, repo.json says ${r.expected}`), (failed = true);
+        else if (!r.verified) console.log(`note ${g.id} ${v.version}: no sha256 in repo.json (unverified); the file's is ${r.sha256}`);
       } catch {
         console.log(`error ${g.id} ${v.version}: ${path} is missing`), (failed = true);
       }

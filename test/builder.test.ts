@@ -23,6 +23,27 @@ test("addVersion creates a game, extends it newest first, and refreshes a known 
   assert.deepEqual(repo.games.map((g: any) => g.id), ["alpha", "my-game", "zed"]);
 });
 
+test("addVersion and serialize carry a file without a sha256, and a refresh never keeps a stale hash", async () => {
+  const repo = emptyRepo("T", NOW);
+  addVersion(repo, { title: "G", file: { url: "a.zip", size: 3, sha1: "a".repeat(40), sha256: undefined } });
+  assert.deepEqual(repo.games[0].versions[0].file, { url: "a.zip", size: 3, sha1: "a".repeat(40) });
+  // Hashing it later fills the sha256 in and keeps the rest.
+  addVersion(repo, { file: { url: "a.zip", size: 3, sha256: S } });
+  assert.deepEqual(repo.games[0].versions[0].file, { url: "a.zip", size: 3, sha1: "a".repeat(40), sha256: S });
+  // Same size, no hash: nothing says the file changed, so the hashes stay.
+  addVersion(repo, { file: { url: "a.zip", size: 3 } });
+  assert.equal(repo.games[0].versions[0].file.sha256, S);
+  // Another size, or another sha1: the old hashes described the old file.
+  addVersion(repo, { file: { url: "a.zip", size: 4 } });
+  assert.deepEqual(repo.games[0].versions[0].file, { url: "a.zip", size: 4 });
+  addVersion(repo, { file: { url: "a.zip", size: 4, sha256: S, sha1: "a".repeat(40) } });
+  addVersion(repo, { file: { url: "a.zip", size: 4, sha1: "b".repeat(40) } });
+  assert.deepEqual(repo.games[0].versions[0].file, { url: "a.zip", size: 4, sha1: "b".repeat(40) });
+  const back = parseRepo(JSON.parse((await serialize(repo, { now: NOW })).repoJson), "https://x.example/repo.json");
+  assert.deepEqual(back.warnings, []);
+  assert.deepEqual(back.repo.games[0].versions[0].file, { url: "https://x.example/a.zip", size: 4, sha1: "b".repeat(40) });
+});
+
 test("removeVersion, removeGame and updateGame", () => {
   const repo = emptyRepo("T", NOW);
   addVersion(repo, { title: "G", meta: { author: "a", tags: ["x"] }, work: { delfruit: 1, other: 2 }, file: file("a.zip") });

@@ -35,16 +35,25 @@ export interface NewVersion {
   contents?: { path: string; size: number }[];
   readme?: string;
   format?: string;
-  file: { url: string; sha256: string; size: number };
+  /** `sha256` MAY be left out (an unverified archive, SPEC.md §5); `size` may not. `sha1` is a host's advisory checksum. */
+  file: { url: string; sha256?: string; size: number; sha1?: string };
 }
 
-/** Adds a version (newest first) to its game, creating the game if needed; a version already pointing at `file.url` just gets its hash and size refreshed. */
+/** A File with only the hashes it has: `sha256: undefined` would otherwise read as "remove it" below. */
+const fileOf = ({ url, sha256, size, sha1 }: NewVersion["file"]): Json => ({ url, ...(sha256 && { sha256 }), size, ...(sha1 && { sha1 }) });
+
+/** Adds a version (newest first) to its game, creating the game if needed; a version already pointing at `file.url` just gets its hash and size refreshed.
+ *  A refresh without a hash keeps the old one only while nothing says the file changed (its size or another hash). */
 export function addVersion(repo: Json, v: NewVersion): Json {
   const games: Json[] = (repo.games ??= []);
   for (const game of games) {
     for (const old of game.versions ?? []) {
       if (old.file?.url === v.file.url) {
-        old.file = { ...old.file, sha256: v.file.sha256, size: v.file.size };
+        const HASHES = ["sha256", "sha1"] as const;
+        // Another file at the same url: a hash the refresh does not give would describe the old one.
+        const changed = old.file.size !== v.file.size || HASHES.some((k) => v.file[k] && old.file[k] && v.file[k] !== old.file[k]);
+        old.file = { ...old.file, ...fileOf(v.file) };
+        if (changed) for (const k of HASHES) if (!v.file[k]) delete old.file[k];
         if (v.contents) old.contents = v.contents;
         if (v.readme) old.readme = v.readme;
         return game;
@@ -65,7 +74,7 @@ export function addVersion(repo: Json, v: NewVersion): Json {
   if (label === undefined) for (let n = game.versions.length + 1; taken.has((label = String(n))); n++);
   else if (taken.has(label)) throw new Error(`game ${id} already has a version ${label}`);
   const { notes, released, format, file, contents, readme } = v;
-  game.versions.unshift({ version: label, file, ...(format && { format }), ...(notes && { notes }), ...(contents && { contents }), ...(readme && { readme }), ...(released && { released }) });
+  game.versions.unshift({ version: label, file: fileOf(file), ...(format && { format }), ...(notes && { notes }), ...(contents && { contents }), ...(readme && { readme }), ...(released && { released }) });
   return game;
 }
 
@@ -73,7 +82,7 @@ export function addVersion(repo: Json, v: NewVersion): Json {
 export function upsertArchive(
   repo: Json,
   url: string,
-  hashed: { sha256: string; size: number },
+  hashed: { sha256?: string; size: number; sha1?: string },
   opts: { id?: string; title?: string; version?: string } = {},
 ): void {
   const title = opts.title ?? titleOf(decodeURIComponent(url));

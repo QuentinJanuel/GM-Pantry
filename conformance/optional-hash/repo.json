@@ -1,0 +1,8 @@
+{"schema":1,"name":"Optional hash","updated":"2026-11-21","games":[
+ {"id":"hashless","title":"Hashless","versions":[
+   {"version":"2","file":{"url":"h2.zip","size":10,"sha1":"da39a3ee5e6b4b0d3255bfef95601890afd80709"}},
+   {"version":"1","file":{"url":"h1.zip","size":10}},
+   {"version":"bad-hash","file":{"url":"h0.zip","sha256":"NOTHEX","size":10}},
+   {"version":"no-size","file":{"url":"h0.zip"}}]},
+ {"id":"advisory","title":"Bad sha1 is dropped","versions":[
+   {"version":"1","file":{"url":"a.zip","size":1,"sha1":"NOTHEX"}}]}]}

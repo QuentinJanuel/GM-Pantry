@@ -5,7 +5,7 @@ title: Protocol reference
 
 # Protocol reference
 
-Protocol **v1**: `schema` is `1`, specification revision 1. This page summarises
+Protocol **v1**: `schema` is `1`, specification revision 2. This page summarises
 [SPEC.md](https://github.com/QuentinJanuel/GM-Pantry/blob/main/SPEC.md), which is normative. `repo.json` is one UTF-8 JSON object.
 
 ## Repository
@@ -57,7 +57,7 @@ All advisory: `author` (at most 120 characters), `description` (2000), `tags` (u
 | field | |
 |---|---|
 | `version` | Required free-form label, at most 64 characters. It is displayed, never compared. |
-| `file` | Required: `url` (may be relative), `sha256` (lowercase hex of the archive bytes exactly as served) and `size` (bytes). |
+| `file` | Required: `url` (may be relative) and `size` (bytes). `sha256` (lowercase hex of the archive bytes exactly as served) should be there; it may be left out when hashing costs too much (see [Unverified archives](#unverified-archives)). Optional `sha1`: 40 lowercase hex digits a host reported for the file (Backblaze's `X-Bz-Content-Sha1`); advisory. |
 | `format` | Optional `"zip"`, `"7z"` or `"rar"`; if absent the consumer guesses. |
 | `build` | Optional claimed SHA-256 of the normalised game payload inside the archive. A hint: recompute it if you need it. |
 | `notes` | Optional, at most 2000 characters. |
@@ -67,6 +67,13 @@ All advisory: `author` (at most 120 characters), `description` (2000), `tags` (u
 
 Archives are stored exactly as distributed. A repo tool never modifies, recompresses or repacks one,
 and a consumer checks `size` and `sha256` after downloading and discards the file on a mismatch (also when it assembled the file from `Range` requests).
+
+### Unverified archives
+
+A `file` without `sha256` is unverified. A reader still checks `size` (and `sha1` if given) and discards the file on a mismatch, and must not
+treat or show it as verified. It may use it on trust on first use: keep the SHA-256 of what it downloaded for that repo and file url, and treat a later
+download whose SHA-256 differs as a mismatch, since the file at that address changed. Readers of revision 1 (gm-pantry 0.6.0 and earlier) skip a
+version without `sha256`, and a game left with none, so a repo that uses them is only fully visible to newer readers.
 
 ## URLs
 
@@ -90,7 +97,7 @@ forever. A consumer must check a shard's size and hash and must not use any part
 - Unknown fields are ignored at every level.
 - `repo.json` fails to load if it is not an object, `schema` is not `1`, or `name`, `updated` or `games` is missing or malformed.
 - A malformed game, a duplicate `id` (the first wins) or a game left with no valid version is skipped; a malformed version is skipped. Skips should be reported.
-- A malformed advisory field is dropped and the entry stays.
+- A malformed advisory field (`file.sha1` among them) is dropped and the entry stays. A `file.sha256` that is present but malformed skips its version.
 - A bad shard (unreachable, wrong size or hash, not `{ "games": [...] }`) is skipped and reported; the rest loads.
 - Caps: a value over its cap is malformed. Beyond 2 000 games per file, 1 000 shards, or 200 versions per game, the extras are ignored.
 
