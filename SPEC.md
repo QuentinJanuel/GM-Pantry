@@ -1,6 +1,6 @@
 # GM-Pantry: the game repository format
 
-Revision 1.
+Revision 2.
 
 The key words MUST, MUST NOT, SHOULD, SHOULD NOT and MAY are to be read as in RFC 2119.
 
@@ -37,7 +37,7 @@ These notes add no requirement; the revision of this document does not change.
 - **Caching.** `repo.json` is the only mutable file: serve it with `Cache-Control: no-cache`, so a cache
   revalidates it with its `ETag` and an update shows at once. A shard is named after its content (§3.7)
   and never changes: `public, max-age=31536000, immutable`. An archive is whatever the owner chose;
-  it is checked by hash anyway (§5).
+  it is checked by size and hash anyway (§5).
 - **Publication order.** A publisher uploads archives and new shards first and `repo.json` last, and
   deletes shards that nothing lists any more only after `repo.json` is live. A reader then never
   sees a `repo.json` that points at a missing file.
@@ -107,8 +107,18 @@ At least one of `games` and `shards` MUST be present. A repo MAY have both: the 
 | `readme` | string | MAY. The text of the archive's README, so it can be shown without downloading the archive. Advisory. |
 | `released` | string | MAY. ISO-8601 date. |
 
-File: `url` (string, MAY be relative to `repo.json`), `sha256` (lowercase hex SHA-256 of the archive
-bytes, exactly as served), `size` (the archive length in bytes, a non-negative integer).
+File:
+
+| field | type | |
+|---|---|---|
+| `url` | string | MUST be present. MAY be relative to `repo.json`. |
+| `size` | integer | MUST be present. The archive length in bytes, a non-negative integer. |
+| `sha256` | string | SHOULD be present. Lowercase hex SHA-256 of the archive bytes, exactly as served. A publisher MAY leave it out when hashing is too costly (a large list added by url: the size comes cheaply from `Content-Length`, the hash only from the whole download); the archive is then *unverified* (§5). |
+| `sha1` | string | MAY. 40 lowercase hex digits: a SHA-1 the host reported for the archive, such as Backblaze B2's `X-Bz-Content-Sha1`. Advisory, and no substitute for `sha256`: SHA-1 is not collision resistant. |
+
+A reader of revision 1 (gm-pantry 0.6.0 and earlier) skips a Version without `sha256` as malformed,
+and a Game left with no Version at all: a repo with entries that have none is only fully visible to
+newer readers.
 
 ### 3.5 URLs
 
@@ -119,7 +129,7 @@ After resolution, every url MUST be `https` (§2).
 ### 3.6 Archives
 
 An archive is stored exactly as the author distributed it. A repo tool MUST NOT modify, recompress
-or repack an archive, and the `sha256` is the hash of that unmodified file.
+or repack an archive, and the `sha256` (when given) is the hash of that unmodified file.
 
 ### 3.7 Shards
 
@@ -147,7 +157,8 @@ A consumer follows these rules, so that one bad entry never hides the rest of a 
 3. A Game that is malformed, a duplicate of an earlier `id` (in `games`, then in each shard in order), or left with no valid Version is skipped.
    A Version that is malformed is skipped. A skipped entry SHOULD be reported, not silently lost.
 4. A malformed advisory field (`description`, `homepage`, `icon`, `work`, `meta` and its parts, `format`,
-   `build`, `notes`, `contents`, `readme`, `released`) is dropped; the entry stays.
+   `build`, `notes`, `contents`, `readme`, `released`, `file.sha1`) is dropped; the entry stays. A
+   `file.sha256` that is present but malformed is not advisory: its Version is skipped.
 5. A Shard entry that is malformed is skipped. A shard that cannot be fetched, whose bytes do not match
    its `size` and `sha256` (a consumer MUST check both and MUST NOT use any part of such a file), or
    that is not `{ "games": [...] }` is skipped. Each is reported and the rest of the repo still
@@ -182,8 +193,14 @@ The caps give a repo at most 2 000 inline games plus 1 000 shards of 2 000 games
 
 1. A consumer MUST check the downloaded bytes against `file.size` and `file.sha256`. On a mismatch it
    MUST discard the file and MUST NOT use any part of it.
-2. A consumer that downloads with `Range` MUST verify the assembled whole before use.
-3. A consumer SHOULD revalidate `repo.json` with its `ETag` or `Last-Modified` rather than refetch it.
+2. Without `file.sha256` the archive is *unverified*. A consumer MUST still check `file.size`, and
+   `file.sha1` when it is given, and discard the file on a mismatch as in 1. It MUST NOT treat the
+   archive as verified, nor show it as such. It MAY use it (trust on first use): it SHOULD then keep
+   the SHA-256 of what it downloaded, for that repo and that file url, and treat a later download of
+   the same url whose SHA-256 differs as a mismatch (the file at that address changed since first
+   use).
+3. A consumer that downloads with `Range` MUST verify the assembled whole before use.
+4. A consumer SHOULD revalidate `repo.json` with its `ETag` or `Last-Modified` rather than refetch it.
 
 ## 6. Not in revision 1
 
@@ -200,6 +217,7 @@ repo (§4.2). The revision of this document counts every edit that changes a req
 | revision | change |
 |---|---|
 | 1 | First revision: `schema` 1. Sharding (§3.7) is part of it: nothing was published before it, so `schema` stays 1. |
+| 2 | `file.sha256` is optional (SHOULD), `file.sha1` is added (advisory), and §5.2 says how to use an unverified archive. `schema` stays 1: every revision-1 repo is a valid revision-2 repo, and a revision-1 reader skips a Version without `sha256` the way §4.3 skips any malformed entry, so it shows fewer games but loads the repo. |
 
 ## 8. Example
 

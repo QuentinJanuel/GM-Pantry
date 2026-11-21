@@ -4,10 +4,12 @@ export type Format = "zip" | "7z" | "rar";
 
 export interface ArchiveFile {
   url: string;
-  /** Lowercase hex SHA-256 of the archive, exactly as stored. */
-  sha256: string;
+  /** Lowercase hex SHA-256 of the archive, exactly as stored. Absent when the publisher did not hash it: the archive is then unverified (SPEC.md §5). */
+  sha256?: string;
   /** Bytes. */
   size: number;
+  /** Lowercase hex SHA-1 the host reported for the archive (Backblaze's X-Bz-Content-Sha1, for one). Advisory. */
+  sha1?: string;
 }
 
 export interface Version {

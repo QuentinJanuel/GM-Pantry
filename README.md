@@ -27,8 +27,8 @@ A repo is a directory. Its entry point is `repo.json`, and the URL of that file 
 }
 ```
 
-- Archives are stored exactly as distributed and are never modified. Their sha256 is checked after
-  download; a mismatch discards the file.
+- Archives are stored exactly as distributed and are never modified. Their size and sha256 are checked after
+  download; a mismatch discards the file. An archive listed without a sha256 is unverified (SPEC.md §5).
 - File urls may be relative, so a mirror of the directory is a working repo.
 - Unknown fields are ignored; a malformed game or version is skipped and the rest of the repo still loads.
 - A big repo lists content-addressed `shards` (files of at most 1 000 games) instead of inlining its

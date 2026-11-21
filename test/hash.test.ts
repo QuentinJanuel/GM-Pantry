@@ -49,8 +49,8 @@ test("a 4 GiB stream hashes in constant memory", { timeout: 120_000 }, async () 
 test("verifyArchive streams a Blob or a stream instead of buffering", async () => {
   const bytes = randomBytes(3 << 20);
   const file = { sha256: sha(bytes), size: bytes.length };
-  assert.deepEqual(await verifyArchive(new Blob([bytes]), file), { ok: true });
-  assert.deepEqual(await verifyArchive(new Blob([bytes]).stream(), file), { ok: true });
+  assert.deepEqual(await verifyArchive(new Blob([bytes]), file), { ok: true, verified: true, sha256: file.sha256 });
+  assert.deepEqual(await verifyArchive(new Blob([bytes]).stream(), file), { ok: true, verified: true, sha256: file.sha256 });
   assert.deepEqual(await verifyArchive(new Blob([bytes]), { ...file, size: 1 }), { ok: false, reason: "size", expected: 1, actual: bytes.length });
   const bad = await verifyArchive(new Blob([bytes]), { ...file, sha256: "0".repeat(64) });
   assert.equal(bad.ok === false && bad.reason, "sha256");

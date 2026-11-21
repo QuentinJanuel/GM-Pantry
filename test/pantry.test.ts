@@ -60,10 +60,38 @@ test("relative urls resolve against repo.json", () => {
 test("verifyArchive detects a mismatch", async () => {
   const bytes = new TextEncoder().encode("hello");
   const file = { sha256: sha("hello"), size: 5 };
-  assert.deepEqual(await verifyArchive(bytes, file), { ok: true });
-  assert.deepEqual(await verifyArchive(new Blob([bytes]).stream(), file), { ok: true });
+  assert.deepEqual(await verifyArchive(bytes, file), { ok: true, verified: true, sha256: file.sha256 });
+  assert.deepEqual(await verifyArchive(new Blob([bytes]).stream(), file), { ok: true, verified: true, sha256: file.sha256 });
   assert.equal((await verifyArchive(new TextEncoder().encode("hellO"), file)).ok, false);
   assert.deepEqual(await verifyArchive(bytes, { ...file, size: 6 }), { ok: false, reason: "size", expected: 6, actual: 5 });
+});
+
+test("verifyArchive without a sha256 checks size and sha1, and hands back the hash to pin", async () => {
+  const bytes = new TextEncoder().encode("hello");
+  const sha1 = createHash("sha1").update("hello").digest("hex");
+  const pin = { ok: true, verified: false, sha256: sha("hello") };
+  for (const data of [bytes, new Blob([bytes]), new Blob([bytes]).stream()]) {
+    assert.deepEqual(await verifyArchive(data, { size: 5 }), pin);
+    assert.deepEqual(await verifyArchive(data instanceof ReadableStream ? new Blob([bytes]).stream() : data, { size: 5, sha1 }), pin);
+  }
+  assert.deepEqual(await verifyArchive(bytes, { size: 5, sha1: "0".repeat(40) }), { ok: false, reason: "sha1", expected: "0".repeat(40), actual: sha1 });
+  assert.deepEqual(await verifyArchive(new Blob([bytes]), { size: 4 }), { ok: false, reason: "size", expected: 4, actual: 5 });
+  // With a sha256 the sha1 is not needed: the sha256 decides.
+  assert.deepEqual(await verifyArchive(bytes, { size: 5, sha256: sha("hello"), sha1: "0".repeat(40) }), { ...pin, verified: true });
+});
+
+test("a file without a sha256 parses; a malformed sha256 still skips the version, a malformed sha1 is dropped", () => {
+  const v = (file: object) => ({ version: "1", file: { url: "g.zip", size: 1, ...file } });
+  const { repo, warnings } = parseRepo(
+    { schema: 1, name: "n", updated: "2026-01-01", games: [{ id: "g", title: "G", versions: [v({}), v({ sha1: "a".repeat(40) }), v({ sha1: "XYZ" }), v({ sha256: "bad" })] }] },
+    base,
+  );
+  assert.deepEqual(repo.games[0].versions.map((x) => x.file), [
+    { url: "https://example.com/games/g.zip", size: 1 },
+    { url: "https://example.com/games/g.zip", size: 1, sha1: "a".repeat(40) },
+    { url: "https://example.com/games/g.zip", size: 1 },
+  ]);
+  assert.deepEqual(warnings.map((w) => w.path), ["games[0].versions[2].file.sha1", "games[0].versions[3]"]);
 });
 
 test("build is deterministic and keeps hand edits", async () => {

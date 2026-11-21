@@ -20,15 +20,16 @@ There are two entry points: `gm-pantry` and `gm-pantry/s3`.
 import { loadRepo, parseRepo, parseShard, verifyArchive } from "gm-pantry";
 
 const { repo, warnings } = await loadRepo(url, { concurrency: 4, onProgress: (done, total) => {}, shardCache });
-const result = await verifyArchive(bytes, repo.games[0].versions[0].file); // { ok: true } or { ok: false, reason, expected, actual }
+const result = await verifyArchive(bytes, repo.games[0].versions[0].file); // { ok: true, verified, sha256 } or { ok: false, reason, expected, actual }
 ```
 
 - `loadRepo(url, options?)` fetches `repo.json` and every shard, verifies the shards by hash, and returns `{ repo, warnings }`. It throws `RepoError` only if `repo.json` is unusable.
   `shardCache` is `{ get(sha256), put(sha256, bytes) }`: a hit skips the request.
 - `parseRepo(json, baseUrl)` and `parseShard(json, baseUrl, seen?)` read the two kinds of file you fetched yourself. A parsed `Repo` has every url resolved to an absolute one.
-- `verifyArchive(source, file)` checks size and SHA-256 of bytes, a `Blob` or a stream, hashing chunk by chunk.
+- `verifyArchive(source, file)` checks size and SHA-256 of bytes, a `Blob` or a stream, hashing chunk by chunk. A `file` without `sha256` is
+  checked on size (and `sha1`, if given) and comes back `{ ok: true, verified: false, sha256 }`: the computed hash, to pin, not a proof.
 - `validateHosting(url)` runs the hosting checks of `validate --hosting` and returns a `HostingReport` of `Check`s.
-- `hashBlob(blob, { onProgress, signal })` and `hashStream(stream, options)` stream a SHA-256 and return `{ sha256, size }`; a 4 GB `File` is fine.
+- `hashBlob(blob, { onProgress, signal })` and `hashStream(stream, options)` stream a SHA-256 and return `{ sha256, size }`; a 4 GB `File` is fine. `{ sha1: true }` also returns a `sha1`.
 - Also exported: `LIMITS` (the caps), `RepoError`, `isSecureUrl`, `resolveUrl`, and the types `Repo`, `Game`, `Version`, `ArchiveFile`, `Meta`, `Shard`, `Format`, `Warning`.
 
 ### Editing in memory

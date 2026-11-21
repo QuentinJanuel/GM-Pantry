@@ -35,6 +35,7 @@ export class RepoError extends Error {}
 
 const ID = /^[a-z0-9][a-z0-9._-]*$/;
 const SHA256 = /^[0-9a-f]{64}$/;
+const SHA1 = /^[0-9a-f]{40}$/;
 const WORK_KEY = /^[a-z][a-z0-9_-]*$/;
 const DATE = /^\d{4}-\d{2}-\d{2}(T[\d:.]+(Z|[+-]\d{2}:\d{2}))?$/;
 const FORMATS = ["zip", "7z", "rar"];
@@ -177,9 +178,12 @@ function parseVersion(v: unknown, path: string, baseUrl: string, warn: (p: strin
   if (typeof f.url !== "string" || f.url.length > LIMITS.url) return void warn(path, `skipped: "file.url" must be a url`);
   const url = resolveUrl(f.url, baseUrl);
   if (url === undefined || !isSecureUrl(url)) return void warn(path, `skipped: "file.url" must resolve to an https url`);
-  if (typeof f.sha256 !== "string" || !SHA256.test(f.sha256)) return void warn(path, `skipped: "file.sha256" must be 64 lowercase hex digits`);
+  // Optional, but a present hash that is malformed skips the version: it is not advisory.
+  if (f.sha256 !== undefined && (typeof f.sha256 !== "string" || !SHA256.test(f.sha256))) return void warn(path, `skipped: "file.sha256" must be 64 lowercase hex digits`);
   if (!Number.isSafeInteger(f.size) || (f.size as number) < 0) return void warn(path, `skipped: "file.size" must be a non-negative integer`);
-  const file: ArchiveFile = { url, sha256: f.sha256, size: f.size as number };
+  const file: ArchiveFile = { url, ...(f.sha256 !== undefined && { sha256: f.sha256 as string }), size: f.size as number };
+  if (typeof f.sha1 === "string" && SHA1.test(f.sha1)) file.sha1 = f.sha1;
+  else if (f.sha1 !== undefined) warn(`${path}.file.sha1`, "dropped: not 40 lowercase hex digits");
   const version: Version = { version: label, file };
   if (typeof v.format === "string" && FORMATS.includes(v.format)) version.format = v.format as Format;
   else if (v.format !== undefined) warn(`${path}.format`, "dropped: not zip, 7z or rar");
